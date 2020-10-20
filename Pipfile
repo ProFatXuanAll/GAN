@@ -13,6 +13,7 @@ matplotlib = "3.3.2"
 sklearn = "*"
 tensorboard = "2.3.0"
 torch = "1.6.0"
+torchvision = "0.7.0"
 tqdm = "4.50.2"
 
 [requires]
