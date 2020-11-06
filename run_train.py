@@ -16,56 +16,62 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--batch_size',
-        help='',
+        help='Batch size.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--ckpt_step',
-        help='',
+        help='Checkpoint save interval.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--dataset',
         choices=gan.dataset.dataset_map.keys(),
-        help='',
+        help='Name of the dataset.',
         required=True,
         type=str
     )
     parser.add_argument(
         '--dis_d_hid',
-        help='',
+        help='Discriminator hidden dimension.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--dis_k',
-        help='',
+        help='Discriminator number of maxout sub-modules.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--dis_lr',
-        help='',
+        help='Discriminator learning rate.',
+        required=True,
+        type=float
+    )
+    parser.add_argument(
+        '--dis_momentum',
+        help='Discriminator SGD momentum.',
         required=True,
         type=float
     )
     parser.add_argument(
         '--dis_n_layer',
-        help='',
+        help='Discriminator number of hidden layers.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--dis_p_hid',
-        help='',
+        help='Discriminator hidden units dropout.',
         required=True,
         type=float
     )
     parser.add_argument(
         '--dis_p_in',
-        help='',
+        help='Discriminator input units dropout.',
         required=True,
         type=float
     )
@@ -84,29 +90,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--is_normal',
         action='store_true',
-        help=''
+        help='Whether to use normal distribution as generator input noise.'
     )
     parser.add_argument(
         '--gen_d_hid',
-        help='',
+        help='Generator hidden dimension.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--gen_d_in',
-        help='',
+        help='Generator input dimension.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--gen_lr',
-        help='',
+        help='Generator learning rate.',
+        required=True,
+        type=float
+    )
+    parser.add_argument(
+        '--gen_momentum',
+        help='Generator SGD momentum.',
         required=True,
         type=float
     )
     parser.add_argument(
         '--gen_n_layer',
-        help='',
+        help='Generator number of hidden layers.',
         required=True,
         type=int
     )
@@ -118,19 +130,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         '--log_step',
-        help='',
+        help='Logging interval.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--seed',
-        help='',
+        help='Control random seed.',
         required=True,
         type=int
     )
     parser.add_argument(
         '--total_step',
-        help='',
+        help='Total training step.',
         required=True,
         type=int
     )
@@ -168,6 +180,7 @@ def main():
     )
     sampler = iter(dataset)
 
+    # Get discriminator model.
     dis_model = gan.model.Discriminator(
         d_hid=args.dis_d_hid,
         d_in=dataset_cstr.get_d_in(),
@@ -178,6 +191,21 @@ def main():
         p_in=args.dis_p_in
     ).to(device)
 
+    # Get discriminator optimizer.
+    dis_opt = torch.optim.SGD(
+        params=dis_model.parameters(),
+        lr=args.dis_lr,
+        momentum=args.dis_momentum,
+        weight_decay=0.01
+    )
+
+    # Get discriminator scheduler.
+    dis_sch = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer=dis_opt,
+        gamma=1.000004,
+    )
+
+    # Get generator model.
     gen_model = gan.model.Generator(
         d_hid=args.gen_d_hid,
         d_in=args.gen_d_in,
@@ -185,20 +213,18 @@ def main():
         n_layer=args.gen_n_layer
     ).to(device)
 
-    dis_opt = torch.optim.Adam(
-        params=dis_model.parameters(),
-        lr=args.dis_lr,
-        betas=(0.9, 0.99),
-        eps=1e-8,
+    # Get generator optimizer.
+    gen_opt = torch.optim.SGD(
+        params=gen_model.parameters(),
+        lr=args.gen_lr,
+        momentum=args.gen_momentum,
         weight_decay=0.01
     )
 
-    gen_opt = torch.optim.Adam(
-        params=gen_model.parameters(),
-        lr=args.gen_lr,
-        betas=(0.9, 0.99),
-        eps=1e-8,
-        weight_decay=0.01
+    # Get generator scheduler.
+    gen_sch = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer=gen_opt,
+        gamma=1.000004,
     )
 
     # Log performance
@@ -235,6 +261,7 @@ def main():
 
             # Only update discriminator.
             dis_opt.step()
+            dis_sch.step()
             dis_opt.zero_grad()
             gen_opt.zero_grad()
 
@@ -258,6 +285,7 @@ def main():
 
             # Only update generator.
             gen_opt.step()
+            gen_sch.step()
             dis_opt.zero_grad()
             gen_opt.zero_grad()
 
